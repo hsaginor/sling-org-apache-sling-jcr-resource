@@ -27,6 +27,7 @@ import java.security.AccessControlException;
 import java.util.Iterator;
 import java.util.Map;
 
+import javax.jcr.Binary;
 import javax.jcr.Item;
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.Node;
@@ -40,6 +41,7 @@ import org.apache.sling.api.resource.ModifiableValueMap;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ValueMap;
+import org.apache.sling.api.resource.InternalFileProvider;
 import org.apache.sling.api.resource.external.ExternalizableInputStream;
 import org.apache.sling.api.resource.external.URIProvider;
 import org.apache.sling.jcr.resource.api.JcrResourceConstants;
@@ -53,7 +55,8 @@ import org.slf4j.LoggerFactory;
 @Adaptable(adaptableClass=Resource.class, adapters={
         @Adapter({Node.class, Map.class, Item.class, ValueMap.class}),
         @Adapter(value=InputStream.class, condition="If the resource is a JcrNodeResource and has a jcr:data property or is an nt:file node."),
-        @Adapter(value=ExternalizableInputStream.class, condition="If the resource is a JcrNodeResource and has a jcr:data property or is an nt:file node, and can be read using a secure URL.")
+        @Adapter(value=ExternalizableInputStream.class, condition="If the resource is a JcrNodeResource and has a jcr:data property or is an nt:file node, and can be read using a secure URL."),
+        @Adapter(value=InternalFileProvider.class, condition="If the resource is a JcrNodeResource and has a jcr:data property or is an nt:file node."),
 })
 class JcrNodeResource extends JcrItemResource<Node> { // this should be package private, see SLING-1414
 
@@ -133,6 +136,8 @@ class JcrNodeResource extends JcrItemResource<Node> { // this should be package 
             return (Type) getInputStream(); // unchecked cast
         } else if (type == Map.class || type == ValueMap.class) {
             return (Type) new JcrValueMap(getNode(), this.helper); // unchecked cast
+        } else if(type == InternalFileProvider.class) {
+            return (Type) getFileProvider();
         } else if (type == ModifiableValueMap.class ) {
             // check write
             try {
@@ -221,6 +226,33 @@ class JcrNodeResource extends JcrItemResource<Node> { // this should be package 
         }
 
         // fallback to non-streamable resource
+        return null;
+    }
+    
+    private InternalFileProvider getFileProvider() {
+        final Node node = getNode();
+        if (node != null) {
+            Binary data = null;
+            
+            try {
+                // find the content node: for nt:file it is jcr:content
+                // otherwise it is the node of this resource
+                Node content = node.isNodeType(NT_FILE)
+                        ? node.getNode(JCR_CONTENT)
+                        : node.isNodeType(NT_LINKEDFILE) ? node.getProperty(JCR_CONTENT).getNode() : node;
+
+                if (content.hasProperty(JCR_DATA)) {
+                    data = content.getProperty(JCR_DATA).getBinary();
+                }
+            } catch (RepositoryException re) {
+                LOGGER.error("getFileProvider: Cannot get Binary for " + this, re);
+            }
+            
+            if(data != null) {
+                return new JcrInternalFileProvider(data);
+            }
+        }
+        
         return null;
     }
 
