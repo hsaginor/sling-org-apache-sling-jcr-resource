@@ -27,6 +27,8 @@ import org.apache.commons.io.IOUtils;
 
 import javax.jcr.Binary;
 import javax.jcr.RepositoryException;
+import org.apache.jackrabbit.oak.api.blob.FileReferencable;
+import org.apache.jackrabbit.oak.api.blob.TempFileReference;
 
 import org.apache.sling.api.resource.InternalFileProvider;
 import org.slf4j.Logger;
@@ -43,6 +45,7 @@ public class JcrInternalFileProvider implements InternalFileProvider {
     private static final Logger LOGGER = LoggerFactory.getLogger( JcrInternalFileProvider.class );
 
     private Binary data;
+    private TempFileReference fileRef;
     private File tmpFile;
 
     JcrInternalFileProvider(Binary data) {
@@ -53,17 +56,32 @@ public class JcrInternalFileProvider implements InternalFileProvider {
     public File getFile() {
         if (tmpFile == null) {
             String fileName = "sling-jcr-file-" + System.currentTimeMillis();
+            
+            try {
+				tmpFile = getOAKFile(fileName);
+			} catch (RepositoryException e1) {
+				LOGGER.warn("Unable to get tempruary file from OAK.", e1);
+			} catch (IOException e1) {
+				LOGGER.warn("Unable to get tempruary file from OAK.", e1);
+			}
+            
+            if(tmpFile != null) {
+            	// OAK provided a file reference.
+            	// Nothing else to do here.
+            	return tmpFile;
+            }
+            
             FileOutputStream out = null;
             InputStream in = null;
             
             try {
+         
                 tmpFile = File.createTempFile(fileName, null);
                 tmpFile.deleteOnExit();
                 
                 out = new FileOutputStream(tmpFile);
                 in = data.getStream();
                 IOUtils.copy(in, out);
-                tmpFile.setWritable(false);
             } catch (IOException e) {
                 LOGGER.error("Unable to create tempruary file.", e);
             } catch (RepositoryException e) {
@@ -88,10 +106,27 @@ public class JcrInternalFileProvider implements InternalFileProvider {
 
     @Override
     public void release() {
+    	if(fileRef != null) {
+    		fileRef.close();
+    		tmpFile = null;
+    		fileRef = null;
+    	}
+    	
         if(tmpFile != null) {
-            tmpFile.setWritable(true);
             tmpFile.delete();
+            tmpFile = null;
         }
+    }
+    
+    private File getOAKFile(String nameHint) throws RepositoryException, IOException {
+    	if(data instanceof FileReferencable) {
+    		if(fileRef == null) {
+    			fileRef = ( (FileReferencable)data ).getTempFileReference();
+    		}
+    		
+    		return fileRef.getTempFile(nameHint, null);
+    	}
+    	return null;
     }
 
 }
