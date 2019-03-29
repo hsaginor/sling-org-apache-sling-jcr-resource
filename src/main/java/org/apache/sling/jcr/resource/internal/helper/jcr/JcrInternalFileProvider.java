@@ -56,29 +56,29 @@ public class JcrInternalFileProvider implements InternalFileProvider {
     public File getFile() {
         if (tmpFile == null) {
             String fileName = "sling-jcr-file-" + System.currentTimeMillis();
-            
+
             try {
-				tmpFile = getOAKFile(fileName);
-			} catch (RepositoryException e1) {
-				LOGGER.warn("Unable to get tempruary file from OAK.", e1);
-			} catch (IOException e1) {
-				LOGGER.warn("Unable to get tempruary file from OAK.", e1);
-			}
-            
-            if(tmpFile != null) {
-            	// OAK provided a file reference.
-            	// Nothing else to do here.
-            	return tmpFile;
+                tmpFile = getOAKFile(fileName);
+            } catch (RepositoryException e1) {
+                LOGGER.warn("Unable to get tempruary file from OAK.", e1);
+            } catch (IOException e1) {
+                LOGGER.warn("Unable to get tempruary file from OAK.", e1);
             }
-            
+
+            if (tmpFile != null) {
+                // OAK provided a file reference.
+                // Nothing else to do here.
+                return tmpFile;
+            }
+
             FileOutputStream out = null;
             InputStream in = null;
-            
+
             try {
-         
+
                 tmpFile = File.createTempFile(fileName, null);
                 tmpFile.deleteOnExit();
-                
+
                 out = new FileOutputStream(tmpFile);
                 in = data.getStream();
                 IOUtils.copy(in, out);
@@ -87,46 +87,48 @@ public class JcrInternalFileProvider implements InternalFileProvider {
             } catch (RepositoryException e) {
                 LOGGER.error("Unable to create tempruary file.", e);
             } finally {
-                if(out != null) {
+                if (out != null) {
                     try {
                         out.close();
-                    } catch (IOException e) {}
+                    } catch (IOException e) {
+                    }
                 }
-                
-                if(in != null) {
+
+                if (in != null) {
                     try {
                         in.close();
-                    } catch (IOException e) {}
+                    } catch (IOException e) {
+                    }
                 }
             }
         }
-        
+
         return tmpFile;
     }
 
     @Override
     public void release() {
-    	if(fileRef != null) {
-    		fileRef.close();
-    		tmpFile = null;
-    		fileRef = null;
-    	}
-    	
-        if(tmpFile != null) {
+        if (fileRef != null) {
+            fileRef.close();
+            tmpFile = null;
+            fileRef = null;
+        }
+
+        if (tmpFile != null) {
             tmpFile.delete();
             tmpFile = null;
         }
     }
-    
+
     private File getOAKFile(String nameHint) throws RepositoryException, IOException {
-    	if(data instanceof FileReferencable) {
-    		if(fileRef == null) {
-    			fileRef = ( (FileReferencable)data ).getTempFileReference();
-    		}
-    		
-    		return fileRef.getTempFile(nameHint, null);
-    	}
-    	return null;
+        if (data instanceof FileReferencable) {
+            if (fileRef == null) {
+                fileRef = ((FileReferencable) data).getTempFileReference();
+            }
+
+            return fileRef.getTempFile(nameHint, null);
+        }
+        return null;
     }
 
 }
